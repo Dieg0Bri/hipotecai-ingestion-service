@@ -22,6 +22,25 @@ const upload = multer({
   limits: { fileSize: config.maxUploadSizeBytes },
 });
 
+// URL firmada de DESCARGA para que el frontend (visor PDF) lea el archivo
+// directo desde GCS sin pasar por nuestro servicio. ?gcs_path=<path>
+router.get('/signed-download-url', async (req, res) => {
+  try {
+    const gcsPath = req.query.gcs_path;
+    if (!gcsPath) {
+      return res.status(400).json({ status: 'error', code: 'MISSING_GCS_PATH', message: 'gcs_path es requerido.' });
+    }
+    const result = await gcsService.getSignedDownloadUrl(String(gcsPath));
+    res.status(200).json({ status: 'success', data: result });
+  } catch (err) {
+    if (err.code === 'NOT_FOUND') {
+      return res.status(404).json({ status: 'error', code: 'NOT_FOUND', message: err.message });
+    }
+    loggingService.error('Signed download URL error', { error: err.message });
+    res.status(500).json({ status: 'error', code: 'SIGN_URL_FAILED', message: err.message });
+  }
+});
+
 // 1) URL firmada para subida directa
 router.post('/signed-upload-url', async (req, res) => {
   try {

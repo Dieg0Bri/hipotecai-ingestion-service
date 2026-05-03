@@ -72,7 +72,26 @@ async function getSignedUploadUrl(folio, originalName, mimeType) {
   };
 }
 
-module.exports = { putObject, getSignedUploadUrl, buildObjectKey };
+// Signed URL de READ para que el frontend descargue el PDF directo desde GCS.
+// 1 hora de validez. El SA del ingestion-service necesita storage.objectViewer.
+async function getSignedDownloadUrl(gcsPath) {
+  if (!storage) throw new Error('GCS no inicializado.');
+  const file = storage.bucket(config.gcsBucketDocumentos).file(gcsPath);
+  const [exists] = await file.exists();
+  if (!exists) {
+    const e = new Error(`Objeto no existe: ${gcsPath}`);
+    e.code = 'NOT_FOUND';
+    throw e;
+  }
+  const [url] = await file.getSignedUrl({
+    version: 'v4',
+    action: 'read',
+    expires: Date.now() + 60 * 60 * 1000,
+  });
+  return { download_url: url, gcs_path: gcsPath, expires_in: 3600 };
+}
+
+module.exports = { putObject, getSignedUploadUrl, getSignedDownloadUrl, buildObjectKey };
 
 // Helper: extensión a partir de mimetype para fallback
 function _ext(mimeType, originalName) {
