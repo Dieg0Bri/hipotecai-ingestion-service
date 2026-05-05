@@ -1,6 +1,7 @@
 const { OAuth2Client } = require('google-auth-library');
 const config = require('../../config');
 const loggingService = require('../services/loggingService');
+const { resolveTenantId, DEFAULT_TENANT_ID } = require('../services/tenantService');
 
 const client = config.googleClientId ? new OAuth2Client(config.googleClientId) : null;
 
@@ -15,6 +16,7 @@ const verifyGoogleOAuth = async (req, res, next) => {
   try {
     if (config.skipAuth || process.env.NODE_ENV === 'test') {
       req.user = TEST_USER;
+      req.tenantId = DEFAULT_TENANT_ID;
       return next();
     }
 
@@ -48,6 +50,7 @@ const verifyGoogleOAuth = async (req, res, next) => {
 
     if (!userInfo) return res.status(401).json({ status: 'error', code: 'NO_USER_INFO', message: 'Sin info usuario.' });
     req.user = userInfo;
+    req.tenantId = await resolveTenantId(userInfo.email);
     next();
   } catch (err) {
     loggingService.error('OAuth middleware error', { error: err.message });

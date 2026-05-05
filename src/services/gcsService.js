@@ -29,6 +29,9 @@ async function putObject(folio, originalName, buffer, mimeType) {
   const objectKey = buildObjectKey(folio, originalName);
   const file = storage.bucket(config.gcsBucketDocumentos).file(objectKey);
 
+  // ifGenerationMatch: 0 → falla si ya existe un objeto con esta key.
+  // Combinado con object versioning y retention en el bucket, esto convierte la
+  // ingesta en write-once para auditoría legal.
   await file.save(buffer, {
     contentType: mimeType,
     metadata: {
@@ -39,13 +42,49 @@ async function putObject(folio, originalName, buffer, mimeType) {
       },
     },
     resumable: false,
+    preconditionOpts: { ifGenerationMatch: 0 },
   });
+
+  // Refresh metadata para capturar el `generation` que GCS asignó.
+  const [meta] = await file.getMetadata();
 
   return {
     gcs_path: objectKey,
     gcs_uri: `gs://${config.gcsBucketDocumentos}/${objectKey}`,
     size_bytes: buffer.length,
     mime_type: mimeType,
+    generation: meta.generation ? String(meta.generation) : null,
+  };
+}
+
+/**
+ * Para flujos por signed-upload-url: el cliente subió el archivo, nosotros
+ * sólo conocemos el path. Descargamos para hashear server-side y leer el
+ * `generation`. Esencial para inmutabilidad: el sha256 que el cliente declara
+ * por su lado NO es confiable.
+ */
+async function fetchObjectMetaAndHash(gcsPath) {
+  if (!storage) throw new Error('GCS no inicializado.');
+  const crypto = require('crypto');
+  const file = storage.bucket(config.gcsBucketDocumentos).file(gcsPath);
+
+  const [exists] = await file.exists();
+  if (!exists) {
+    const e = new Error(`Objeto no existe: ${gcsPath}`);
+    e.code = 'NOT_FOUND';
+    throw e;
+  }
+
+  const [meta] = await file.getMetadata();
+  const [buf] = await file.download();
+  const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
+
+  return {
+    gcs_path: gcsPath,
+    sha256,
+    size_bytes: buf.length,
+    mime_type: meta.contentType || null,
+    generation: meta.generation ? String(meta.generation) : null,
   };
 }
 
@@ -91,7 +130,13 @@ async function getSignedDownloadUrl(gcsPath) {
   return { download_url: url, gcs_path: gcsPath, expires_in: 3600 };
 }
 
-module.exports = { putObject, getSignedUploadUrl, getSignedDownloadUrl, buildObjectKey };
+module.exports = {
+  putObject,
+  getSignedUploadUrl,
+  getSignedDownloadUrl,
+  fetchObjectMetaAndHash,
+  buildObjectKey,
+};
 
 // Helper: extensión a partir de mimetype para fallback
 function _ext(mimeType, originalName) {
