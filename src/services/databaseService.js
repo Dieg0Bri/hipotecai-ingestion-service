@@ -88,6 +88,26 @@ class DatabaseService {
   }
 
   /**
+   * Lookup del .md OCR por su URI completa (`gs://bucket/path`). Devuelve
+   * el path dentro del bucket + el tenant del archivo padre para que el
+   * caller decida si firma o devuelve 404.
+   *
+   * Hacemos JOIN a dt_archivos porque el tenant vive ahí, no en
+   * dt_ocr_documento — el OCR es un artefacto derivado y hereda la
+   * autorización del archivo original.
+   */
+  async findOcrDocumentoByGcsUri(gcsUri) {
+    const { rows } = await pool.query(
+      `SELECT o.gcs_path, o.gcs_bucket, a.id_archivo, a.id_tenant, a.eliminado
+       FROM dt_ocr_documento o
+       JOIN dt_archivos a ON a.id_archivo = o.id_archivo
+       WHERE o.gcs_uri = $1`,
+      [gcsUri]
+    );
+    return rows[0] || null;
+  }
+
+  /**
    * Detecta duplicados por sha256 dentro del mismo estudio.
    */
   async findDuplicate(folio, sha256) {

@@ -130,10 +130,31 @@ async function getSignedDownloadUrl(gcsPath) {
   return { download_url: url, gcs_path: gcsPath, expires_in: 3600 };
 }
 
+// Signed URL de READ para el .md OCR (bucket separado de los PDFs originales).
+// Recibe el path dentro del bucket OCR — el caller ya validó que la URI
+// pertenezca a este bucket y que el archivo padre sea del tenant del usuario.
+async function getSignedDownloadUrlOcr(ocrPath) {
+  if (!storage) throw new Error('GCS no inicializado.');
+  const file = storage.bucket(config.gcsBucketOcr).file(ocrPath);
+  const [exists] = await file.exists();
+  if (!exists) {
+    const e = new Error(`Objeto no existe: ${ocrPath}`);
+    e.code = 'NOT_FOUND';
+    throw e;
+  }
+  const [url] = await file.getSignedUrl({
+    version: 'v4',
+    action: 'read',
+    expires: Date.now() + 60 * 60 * 1000,
+  });
+  return { download_url: url, gcs_path: ocrPath, expires_in: 3600 };
+}
+
 module.exports = {
   putObject,
   getSignedUploadUrl,
   getSignedDownloadUrl,
+  getSignedDownloadUrlOcr,
   fetchObjectMetaAndHash,
   buildObjectKey,
 };

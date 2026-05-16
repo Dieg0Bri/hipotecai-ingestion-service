@@ -18,6 +18,11 @@ module.exports = {
 
   // GCS
   gcsBucketDocumentos: process.env.GCS_BUCKET_DOCUMENTOS || 'hipotecai-documentos',
+  // Bucket separado para el .md derivado del OCR. ingestion-service firma
+  // signed URLs de lectura para que el visor descargue el markdown — no lo
+  // escribe, eso vive en ocr-api. La firma viene a este servicio porque acá
+  // ya hay tenant scoping para el PDF original y reutilizamos el patrón.
+  gcsBucketOcr: process.env.GCS_BUCKET_OCR || 'hipotecai-ocr',
   gcsSignedUrlExpirationMinutes: parseInt(process.env.GCS_SIGNED_URL_EXPIRATION_MINUTES, 10) || 15,
   maxUploadSizeBytes: parseInt(process.env.MAX_UPLOAD_SIZE_BYTES, 10) || 50 * 1024 * 1024, // 50 MB
 

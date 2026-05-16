@@ -38,10 +38,12 @@ module.exports = (app) => {
   loggingService.info('ingestion-service routes registered', {
     endpoints: [
       'GET   /api-ingestion/health',
-      'POST  /api-ingestion/upload                  (multipart fallback)',
+      'POST  /api-ingestion/upload                       (multipart fallback)',
       'POST  /api-ingestion/upload/signed-upload-url',
+      'GET   /api-ingestion/upload/signed-download-url   (PDF original)',
+      'GET   /api-ingestion/upload/ocr-download-url      (.md OCR derivado)',
       'POST  /api-ingestion/upload/confirm',
-      'POST  /api-ingestion/eventarc                (GCS trigger)',
+      'POST  /api-ingestion/eventarc                     (GCS trigger)',
     ],
   });
 };
